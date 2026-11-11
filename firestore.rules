@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUser(data, userId) {
+      return data.uid == request.auth.uid &&
+             data.uid == userId &&
+             data.keys().hasAll(['uid']) &&
+             data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'preferredLanguage']) &&
+             (!('email' in data) || data.email is string) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoURL' in data) || data.photoURL is string) &&
+             (!('preferredLanguage' in data) || data.preferredLanguage is string);
+    }
+
+    function isValidSession(data, userId) {
+      return data.userId == request.auth.uid &&
+             data.userId == userId &&
+             data.id is string &&
+             data.title is string &&
+             data.title.size() <= 300 &&
+             data.keys().hasAll(['id', 'userId', 'title']) &&
+             data.keys().hasOnly(['id', 'userId', 'title', 'createdAt', 'updatedAt', 'messagesJson']) &&
+             (!('createdAt' in data) || data.createdAt is number) &&
+             (!('updatedAt' in data) || data.updatedAt is number) &&
+             (!('messagesJson' in data) || data.messagesJson is string);
+    }
+
+    // User profile: only accessible by the owner (PII Isolation)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUser(incoming(), userId);
+      allow update: if isValidId(userId) && isOwner(userId) && isValidUser(incoming(), userId);
+      allow delete: if isValidId(userId) && isOwner(userId);
+
+      // Private chat sessions subcollection
+      match /sessions/{sessionId} {
+        allow get: if isValidId(userId) && isValidId(sessionId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(sessionId) && isOwner(userId) && isValidSession(incoming(), userId);
+        allow update: if isValidId(userId) && isValidId(sessionId) && isOwner(userId) && isValidSession(incoming(), userId);
+        allow delete: if isValidId(userId) && isValidId(sessionId) && isOwner(userId);
+      }
+    }
+  }
+}

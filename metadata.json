@@ -1,0 +1,8 @@
+{
+  "name": "Remix Namma AI",
+  "description": "A modern bilingual AI chatbot supporting Tamil, English, and Tanglish with auto-detection and a clean ChatGPT-style interface.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
